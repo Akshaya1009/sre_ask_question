@@ -67,16 +67,24 @@ jobs:
             $(cat pr_diff.txt | head -c 5000) # Limit size to fit LLM context
 
           
-      - name: Create Tag and Release
+      - name: Calculate Next Version
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Map AI response to the tagger's expected input
+          default_bump: ${{ steps.ai_agent.outputs.response }}
+          # Just calculate, don't create the tag yet (gh release will do it)
+          dry_run: true 
+
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BUMP_TYPE: ${{ steps.ai_agent.outputs.response }}
+          NEW_TAG: ${{ steps.tag_version.outputs.new_tag }}
+          BUMP: ${{ steps.ai_agent.outputs.response }}
         run: |
-          # Clean the AI response
-          CLEAN_BUMP=$(echo "$BUMP_TYPE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-          
-          # Use GitHub CLI to create the release
-          # It automatically calculates the next version based on --minor/--patch
-          gh release create --generate-notes --$CLEAN_BUMP \
-            --title "Release ($CLEAN_BUMP): SRE Tool Update" \
+          # Use the calculated NEW_TAG instead of the broken --minor flag
+          gh release create "$NEW_TAG" \
+            --generate-notes \
+            --title "Release $NEW_TAG ($BUMP): SRE Tool Update" \
             --target main
